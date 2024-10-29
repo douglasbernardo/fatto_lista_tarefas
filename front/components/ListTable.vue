@@ -21,15 +21,39 @@
           <td>{{ item.limitDate }}</td>
           <td>
             <v-btn icon="mdi-pencil" variant="text"></v-btn>
-            <v-btn icon="mdi-delete" variant="text" color="red"></v-btn>
+            <v-btn icon="mdi-delete" @click="deletes(item.name)" variant="text" color="red"></v-btn>
           </td>
         </tr>
       </tbody>
     </v-table>
+    <v-dialog v-model="deleteTaskDialog" width="auto">
+      <v-card max-width="auto">
+      <v-card-title>Deletar Tarefa: {{ nameToDelete }}</v-card-title>
+      <v-card-actions>
+        <v-spacer></v-spacer>
+        <v-btn
+        class="bg-red"
+          text="Deletar"
+          @click=""
+        ></v-btn>
+        <v-btn
+        class="bg-blue"
+          text="Voltar"
+          @click="deleteTaskDialog = false"
+        ></v-btn>
+      </v-card-actions>
+    </v-card>
+    </v-dialog>
   </v-container>
 </template>
 <script setup lang="ts">
   const tableHeaders = ref(['id','Nome da Tarefa','Custo','Data Limite'])
+  const deleteTaskDialog = ref(false)
+  const nameToDelete = ref("")
+  const deletes = ((name: string) => {
+    nameToDelete.value = name
+    deleteTaskDialog.value = true
+  })
   const desserts = ref([
     {
         id: 1,
