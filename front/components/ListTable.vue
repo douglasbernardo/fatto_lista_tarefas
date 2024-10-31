@@ -6,7 +6,7 @@
       <thead class="bg-grey">
         <tr>
           <th class="text-left" v-for="item in tableHeaders" v-text="item" />
-          <th colspan="2">Ações</th>
+          <th colspan="2">Ordem</th>
         </tr>
       </thead>
       <tbody>
@@ -17,11 +17,15 @@
         >
           <td>#{{ task.id }}</td>
           <td>{{ task.name }}</td>
-          <td>R$ {{ task.cost }}</td>
+          <td>{{ Intl.NumberFormat('pt-br',{ style: 'currency', currency: 'BRL' }).format(task.cost) }}</td>
           <td>{{ task.date }}</td>
           <td>
             <v-btn icon="mdi-pencil" variant="text"></v-btn>
             <v-btn icon="mdi-delete" @click="deletes(task.name, task.id)" variant="text" color="red"></v-btn>
+          </td>
+          <td>
+            <v-btn color="green"icon="mdi-arrow-up" @click="" variant="text"></v-btn>
+            <v-btn color="blue" icon="mdi-arrow-down" @click="" variant="text"></v-btn>
           </td>
         </tr>
         <h3 v-if="!tasks.length" class="text-center">Não há tarefas cadastradas no momento</h3>
@@ -77,13 +81,12 @@
     </v-card>
     </v-dialog>
   </v-container>
-  
 </template>
 <script setup lang="ts">
   import { addDoc, collection, deleteDoc, doc, getDocs, orderBy, query, where } from 'firebase/firestore';
   import { db } from '~/firebaseConfig';
 
-  const tableHeaders = ref(['ID','Nome da Tarefa','Custo','Data Limite'])
+  const tableHeaders = ref(['ID','Nome da Tarefa','Custo','Data Limite', 'Ações'])
   const deleteTaskDialog = ref(false)
   const insertTask = ref(false)
   const nameToDelete = ref("")
