@@ -92,6 +92,9 @@
 <script setup lang="ts">
   import { addDoc, collection, deleteDoc, doc, getDoc, getDocs, orderBy, query, updateDoc, where } from 'firebase/firestore';
   import { db } from '~/firebaseConfig';
+  import { useTaskStore } from '~/store/tasks/task_manager';
+
+  const tasksManager = useTaskStore()
 
   const tableHeaders = ref(['ID','Nome da Tarefa','Custo','Data Limite', 'Ações'])
   const deleteTaskDialog = ref(false)
@@ -102,7 +105,7 @@
   const idDelete = ref("")
   const dataInsert = reactive({ name: '', cost: '', date: '' })
   const errorInsert = ref('')
-  const tasks = ref([])
+  const tasks = computed(()=> tasksManager.tasks)
   const deletes = ((name: string, id: string) => {
     nameToDelete.value = name
     idDelete.value = id
@@ -113,7 +116,7 @@
       const taskRef = doc(db, "tarefas", idDelete.value); // Referência ao documento
       await deleteDoc(taskRef); // Deletar o documento
       deleteTaskDialog.value = false
-      fetchAllData(); // Atualiza a lista de tarefas após a deleção
+      tasksManager.get_all_tasks() // Atualiza a lista de tarefas após a deleção
     } catch (error) {
       console.error("Erro ao deletar tarefa: ", error);
       errorInsert.value = "Erro ao deletar tarefa.";
@@ -149,11 +152,10 @@
           cost: dataInsert.cost,
           date: dataInsert.date
         });
-        fetchAllData()
+        tasksManager.get_all_tasks()
         insertTask.value = false
         clearData()
         errorInsert.value = ''
-        console.log("Documento atualizado com sucesso!");
       }
     } catch (error) {
       console.error("Erro ao atualizar documento: ", error);
@@ -182,7 +184,7 @@
         errorInsert.value = ''
         await addDoc(collection(db, "tarefas"), {...dataInsert, ordem: novaOrdem});
         insertTask.value = false
-        fetchAllData()
+        tasksManager.get_all_tasks()
         clearData()
       }else{
         errorInsert.value = 'Nome já existe não é possivel adicionar'
@@ -192,17 +194,7 @@
     }
   }
 
-  const fetchAllData = async () => {
-    try {
-      const q = query(collection(db, "tarefas"), orderBy("ordem"));
-      const querySnapshot = await getDocs(q)
-      tasks.value = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-    } catch (error) {
-      console.error("Erro ao buscar dados: ", error);
-    }
-  };
-
   onMounted(() =>{
-    fetchAllData()
+    tasksManager.get_all_tasks()
   })
 </script>
