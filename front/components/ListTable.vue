@@ -6,7 +6,7 @@
       <thead class="bg-grey">
         <tr>
           <th class="text-left" v-for="item in tableHeaders" v-text="item" />
-          <th colspan="2">Ações</th>
+          <th colspan="2">Ordem</th>
         </tr>
       </thead>
       <tbody>
@@ -17,11 +17,15 @@
         >
           <td>#{{ task.id }}</td>
           <td>{{ task.name }}</td>
-          <td>R$ {{ task.cost }}</td>
+          <td>{{ Intl.NumberFormat('pt-br',{ style: 'currency', currency: 'BRL' }).format(task.cost) }}</td>
           <td>{{ task.date }}</td>
           <td>
-            <v-btn icon="mdi-pencil" variant="text"></v-btn>
-            <v-btn icon="mdi-delete" @click="deletes(task.name, task.id)" variant="text" color="red"></v-btn>
+            <v-btn icon="mdi-pencil" @click="edit(task.id)" variant="text"/>
+            <v-btn icon="mdi-delete" @click="deletes(task.name, task.id)" variant="text" color="red"/>
+          </td>
+          <td>
+            <v-btn color="green"icon="mdi-arrow-up" @click="" variant="text"></v-btn>
+            <v-btn color="blue" icon="mdi-arrow-down" @click="" variant="text"></v-btn>
           </td>
         </tr>
         <h3 v-if="!tasks.length" class="text-center">Não há tarefas cadastradas no momento</h3>
@@ -55,6 +59,13 @@
           block
           @click="addTask"
         ></v-btn>
+        <v-btn
+          v-if="isEditing"
+          class="bg-blue"
+          text="Editar"
+          block
+          @click="editTask"
+        ></v-btn>
       </v-card-actions>
     </v-card>
     </v-dialog>
@@ -77,22 +88,19 @@
     </v-card>
     </v-dialog>
   </v-container>
-  
 </template>
 <script setup lang="ts">
-  import { addDoc, collection, deleteDoc, doc, getDocs, orderBy, query, where } from 'firebase/firestore';
+  import { addDoc, collection, deleteDoc, doc, getDoc, getDocs, orderBy, query, updateDoc, where } from 'firebase/firestore';
   import { db } from '~/firebaseConfig';
 
-  const tableHeaders = ref(['ID','Nome da Tarefa','Custo','Data Limite'])
+  const tableHeaders = ref(['ID','Nome da Tarefa','Custo','Data Limite', 'Ações'])
   const deleteTaskDialog = ref(false)
   const insertTask = ref(false)
+  const isEditing = ref(false)
+  const idEdit = ref("")
   const nameToDelete = ref("")
   const idDelete = ref("")
-  const dataInsert = reactive({
-    name: '',
-    cost: '',
-    date: ''
-  })
+  const dataInsert = reactive({ name: '', cost: '', date: '' })
   const errorInsert = ref('')
   const tasks = ref([])
   const deletes = ((name: string, id: string) => {
@@ -100,7 +108,6 @@
     idDelete.value = id
     deleteTaskDialog.value = true
   })
-
   const deleteTask = async () => {
     try {
       const taskRef = doc(db, "tarefas", idDelete.value); // Referência ao documento
@@ -119,6 +126,46 @@
     const querySnapshot = await getDocs(q);
     return !querySnapshot.empty
   })
+
+  const edit = (async(taskId: string) => {
+    idEdit.value = taskId
+    isEditing.value = true
+    insertTask.value = true
+    const q = doc(db, "tarefas", taskId); // Referência ao documento
+    const querySnapshot = await getDoc(q)
+    dataInsert.name = querySnapshot.data().name
+    dataInsert.cost = querySnapshot.data().cost
+    dataInsert.date = querySnapshot.data().date
+  })
+  const editTask = (async() => {
+    const docRef = doc(db, "tarefas", idEdit.value); // Referência ao documento
+    try {
+      if(await verifyName(dataInsert.name.trim())){ 
+        errorInsert.value = 'Nome já existe não é possivel adicionar'
+        return
+      }else{
+        await updateDoc(docRef, {
+          name: dataInsert.name,
+          cost: dataInsert.cost,
+          date: dataInsert.date
+        });
+        fetchAllData()
+        insertTask.value = false
+        clearData()
+        errorInsert.value = ''
+        console.log("Documento atualizado com sucesso!");
+      }
+    } catch (error) {
+      console.error("Erro ao atualizar documento: ", error);
+    }
+  })
+
+  const clearData = (() => {
+    dataInsert.name = ''
+    dataInsert.cost = ''
+    dataInsert.date = ''
+  })
+
   const addTask = async() => {
     const nameExists = await verifyName(dataInsert.name.trim())
     const q = query(collection(db, "tarefas"), orderBy("ordem", "desc"));
@@ -136,9 +183,7 @@
         await addDoc(collection(db, "tarefas"), {...dataInsert, ordem: novaOrdem});
         insertTask.value = false
         fetchAllData()
-        dataInsert.name = ''
-        dataInsert.cost = ''
-        dataInsert.date = ''
+        clearData()
       }else{
         errorInsert.value = 'Nome já existe não é possivel adicionar'
       }
