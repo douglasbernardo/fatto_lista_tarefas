@@ -12,17 +12,17 @@ export const useTaskStore = defineStore('taskManager',{
         async add_task(data: object){
             const q = query(collection(db, "tarefas"), orderBy("ordem", "desc"));
             const querySnapshot = await getDocs(q);
-
-            let novaOrdem = 1; 
+    
+            let novaOrdem = 1;
             if (!querySnapshot.empty) {
-            const lastTask = querySnapshot.docs[0].data();
-            novaOrdem = lastTask.ordem + 1;
+              const lastTask = querySnapshot.docs[0].data();
+              novaOrdem = lastTask.ordem + 1;
             }
             try {
                 await addDoc(collection(db, "tarefas"), {...data, ordem: novaOrdem});
-            }
-            catch (error) {
-                console.error("Erro ao adicionar documento: ", error);
+                this.get_all_tasks()
+            } catch (error) {
+              console.error("Erro ao adicionar documento: ", error);
             }
         },
 
@@ -40,6 +40,7 @@ export const useTaskStore = defineStore('taskManager',{
             try {
                 const taskRef = doc(db, "tarefas", id); 
                 await deleteDoc(taskRef);
+                this.get_all_tasks()
             } catch (error) {
                 console.error("Erro ao deletar tarefa: ", error);
             }
@@ -53,6 +54,7 @@ export const useTaskStore = defineStore('taskManager',{
                     cost: data.cost,
                     date: data.date
                 });
+                this.get_all_tasks()
             }
             catch (error) {
                 console.error("Erro ao atualizar documento: ", error);

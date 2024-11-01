@@ -11,7 +11,7 @@
       </thead>
       <tbody>
         <tr
-          v-for="task in tasksManager.tasks"
+          v-for="(task ,index) in tasksManager.tasks"
           :key="task.id"
           :class="{'bg-yellow-lighten-3': task.cost > 1000}"
         >
@@ -24,8 +24,8 @@
             <v-btn icon="mdi-delete" @click="deletes(task.name, task.id)" variant="text" color="red"/>
           </td>
           <td>
-            <v-btn color="green"icon="mdi-arrow-up" @click="" variant="text"></v-btn>
-            <v-btn color="blue" icon="mdi-arrow-down" @click="" variant="text"></v-btn>
+            <v-btn color="green" :disabled="index == 0" icon="mdi-arrow-up" variant="text" @click="moveTask('up', task,index)"></v-btn>
+            <v-btn color="blue" :disabled="index === tasksManager.tasks.length - 1" icon="mdi-arrow-down" @click="moveTask('down', task,index)" variant="text"></v-btn>
           </td>
         </tr>
         <h3 v-if="!tasksManager.tasks.length" class="text-center">Não há tarefas cadastradas no momento</h3>
@@ -93,7 +93,7 @@
   </v-container>
 </template>
 <script setup lang="ts">
-  import { collection, doc, getDoc, getDocs, query, where } from 'firebase/firestore';
+  import { collection, doc, getDoc, getDocs, query, updateDoc, where } from 'firebase/firestore';
   import { db } from '~/firebaseConfig';
   import { useTaskStore } from '~/store/tasks/task_manager';
 
@@ -113,6 +113,8 @@
     tasksManager.get_all_tasks()
   })
   
+  const clearData = (() => { [dataInsert.name, dataInsert.cost, dataInsert.date] = '' })
+
   const deletes = ((name: string, id: string) => {
     nameToDelete.value = name
     idDelete.value = id
@@ -121,7 +123,6 @@
   const deleteTask = () => {
     tasksManager.delete_task(idDelete.value)
     deleteTaskDialog.value = false
-    tasksManager.get_all_tasks()
   }
 
   const verifyName = (async(name: string) => {
@@ -145,31 +146,50 @@
     const q = query(collection(db, "tarefas"), where("name", "==", dataInsert.name.trim()));
     const querySnapshot = await getDocs(q);
     if(!querySnapshot.docs.some(doc => doc.id !== idEdit.value)){
-      tasksManager.editTask(idEdit.value,dataInsert)
-      tasksManager.get_all_tasks()
-      insertTask.value = false
+      await tasksManager.editTask(idEdit.value,dataInsert)
       clearData()
+      insertTask.value = false
       errorInsert.value = ''
     }else{
       errorInsert.value = 'Essa tarefa já existe, escolha outro nome!'
     }
-  })
-
-  const clearData = (() => {
-    dataInsert.name = ''
-    dataInsert.cost = ''
-    dataInsert.date = ''
   })
 
   const addTask = async() => {
     const nameExists = await verifyName(dataInsert.name.trim())
     if(!nameExists){
       errorInsert.value = ''
-      tasksManager.add_task(dataInsert)
+      await tasksManager.add_task(dataInsert)
+      insertTask.value = false
       clearData()
-      tasksManager.get_all_tasks()
     }else{
       errorInsert.value = 'Essa tarefa já existe, escolha outro nome!'
     }
+  }
+
+  const moveTask = async (direction: string,task: object, index: number) => {
+    if(direction === 'up' && index > 0) {
+      const upTask = tasksManager.tasks[index - 1]
+      await updateOrder(task, upTask)
+      tasksManager.tasks[index] = { ...upTask, ordem: task.ordem };
+      tasksManager.tasks[index-1] = { ...task, ordem: upTask.ordem };
+    } 
+    else if(direction === 'down' && index < tasksManager.tasks.length  - 1){
+      const belowTask = tasksManager.tasks[index + 1]
+      await updateOrder(task, belowTask)
+
+      tasksManager.tasks[index] = { ...belowTask, ordem: task.ordem };
+      tasksManager.tasks[index + 1] = { ...task, ordem: belowTask.ordem };
+    }
+  }
+
+  const updateOrder = async (task1: object, task2: object) => { 
+    const task1Ref = doc(db, 'tarefas', task1.id);
+    const task2Ref = doc(db, 'tarefas', task2.id);
+
+    await updateDoc(task1Ref, { ordem: task2.ordem });
+    await updateDoc(task2Ref, { ordem: task1.ordem });
+
+    await tasksManager.get_all_tasks();
   }
 </script>
