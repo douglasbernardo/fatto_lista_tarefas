@@ -11,7 +11,7 @@
       </thead>
       <tbody>
         <tr
-          v-for="task in tasks"
+          v-for="(task ,index) in tasksManager.tasks"
           :key="task.id"
           :class="{'bg-yellow-lighten-3': task.cost > 1000}"
         >
@@ -24,16 +24,18 @@
             <v-btn icon="mdi-delete" @click="deletes(task.name, task.id)" variant="text" color="red"/>
           </td>
           <td>
-            <v-btn color="green"icon="mdi-arrow-up" @click="" variant="text"></v-btn>
-            <v-btn color="blue" icon="mdi-arrow-down" @click="" variant="text"></v-btn>
+            <v-btn color="green" :disabled="index == 0" icon="mdi-arrow-up" variant="text" @click="moveTask('up', task,index)"></v-btn>
+            <v-btn color="blue" :disabled="index === tasksManager.tasks.length - 1" icon="mdi-arrow-down" @click="moveTask('down', task,index)" variant="text"></v-btn>
           </td>
         </tr>
-        <h3 v-if="!tasks.length" class="text-center">Não há tarefas cadastradas no momento</h3>
+        <h3 v-if="!tasksManager.tasks.length" class="text-center">Não há tarefas cadastradas no momento</h3>
       </tbody>
     </v-table>
     <v-dialog v-model="insertTask" width="auto">
       <v-card max-width="auto">
-      <v-card-title class="bg-grey text-center">Adicionar Nova Tarefa</v-card-title>
+      <v-card-title class="bg-grey text-center">
+        {{!isEditing ? 'Adicionar Nova Tarefa' : 'Editar Tarefa'}}
+      </v-card-title>
       <v-sheet class="mx-auto" width="400">
       <p v-if="errorInsert" class="bg-red text-center ma-2">{{ errorInsert }}</p>
     <v-form fast-fail @submit.prevent class="ma-2">
@@ -53,14 +55,15 @@
   </v-sheet>
       <v-card-actions>
         <v-spacer></v-spacer>
-        <v-btn
+        <v-btn  
+          v-if="!isEditing"
           class="bg-blue"
           text="Adicionar"
           block
           @click="addTask"
         ></v-btn>
         <v-btn
-          v-if="isEditing"
+          v-else
           class="bg-blue"
           text="Editar"
           block
@@ -90,8 +93,11 @@
   </v-container>
 </template>
 <script setup lang="ts">
-  import { addDoc, collection, deleteDoc, doc, getDoc, getDocs, orderBy, query, updateDoc, where } from 'firebase/firestore';
+  import { collection, doc, getDoc, getDocs, query, updateDoc, where } from 'firebase/firestore';
   import { db } from '~/firebaseConfig';
+  import { useTaskStore } from '~/store/tasks/task_manager';
+
+  const tasksManager = useTaskStore()
 
   const tableHeaders = ref(['ID','Nome da Tarefa','Custo','Data Limite', 'Ações'])
   const deleteTaskDialog = ref(false)
@@ -102,22 +108,21 @@
   const idDelete = ref("")
   const dataInsert = reactive({ name: '', cost: '', date: '' })
   const errorInsert = ref('')
-  const tasks = ref([])
+
+  onMounted(() =>{
+    tasksManager.get_all_tasks()
+  })
+  
+  const clearData = (() => { [dataInsert.name, dataInsert.cost, dataInsert.date] = '' })
+
   const deletes = ((name: string, id: string) => {
     nameToDelete.value = name
     idDelete.value = id
     deleteTaskDialog.value = true
   })
-  const deleteTask = async () => {
-    try {
-      const taskRef = doc(db, "tarefas", idDelete.value); // Referência ao documento
-      await deleteDoc(taskRef); // Deletar o documento
-      deleteTaskDialog.value = false
-      fetchAllData(); // Atualiza a lista de tarefas após a deleção
-    } catch (error) {
-      console.error("Erro ao deletar tarefa: ", error);
-      errorInsert.value = "Erro ao deletar tarefa.";
-    }
+  const deleteTask = () => {
+    tasksManager.delete_task(idDelete.value)
+    deleteTaskDialog.value = false
   }
 
   const verifyName = (async(name: string) => {
@@ -138,71 +143,53 @@
     dataInsert.date = querySnapshot.data().date
   })
   const editTask = (async() => {
-    const docRef = doc(db, "tarefas", idEdit.value); // Referência ao documento
-    try {
-      if(await verifyName(dataInsert.name.trim())){ 
-        errorInsert.value = 'Nome já existe não é possivel adicionar'
-        return
-      }else{
-        await updateDoc(docRef, {
-          name: dataInsert.name,
-          cost: dataInsert.cost,
-          date: dataInsert.date
-        });
-        fetchAllData()
-        insertTask.value = false
-        clearData()
-        errorInsert.value = ''
-        console.log("Documento atualizado com sucesso!");
-      }
-    } catch (error) {
-      console.error("Erro ao atualizar documento: ", error);
+    const q = query(collection(db, "tarefas"), where("name", "==", dataInsert.name.trim()));
+    const querySnapshot = await getDocs(q);
+    if(!querySnapshot.docs.some(doc => doc.id !== idEdit.value)){
+      await tasksManager.editTask(idEdit.value,dataInsert)
+      clearData()
+      insertTask.value = false
+      errorInsert.value = ''
+    }else{
+      errorInsert.value = 'Essa tarefa já existe, escolha outro nome!'
     }
-  })
-
-  const clearData = (() => {
-    dataInsert.name = ''
-    dataInsert.cost = ''
-    dataInsert.date = ''
   })
 
   const addTask = async() => {
     const nameExists = await verifyName(dataInsert.name.trim())
-    const q = query(collection(db, "tarefas"), orderBy("ordem", "desc"));
-    const querySnapshot = await getDocs(q);
-    
-    // Definindo a nova ordem
-    let novaOrdem = 1; // Padrão para a primeira tarefa
-    if (!querySnapshot.empty) {
-      const lastTask = querySnapshot.docs[0].data();
-      novaOrdem = lastTask.ordem + 1; // Incrementa a ordem da última tarefa
-    }
-    try {
-      if(!nameExists){
-        errorInsert.value = ''
-        await addDoc(collection(db, "tarefas"), {...dataInsert, ordem: novaOrdem});
-        insertTask.value = false
-        fetchAllData()
-        clearData()
-      }else{
-        errorInsert.value = 'Nome já existe não é possivel adicionar'
-      }
-    } catch (error) {
-      console.error("Erro ao adicionar documento: ", error);
+    if(!nameExists){
+      errorInsert.value = ''
+      await tasksManager.add_task(dataInsert)
+      insertTask.value = false
+      clearData()
+    }else{
+      errorInsert.value = 'Essa tarefa já existe, escolha outro nome!'
     }
   }
 
-  const fetchAllData = async () => {
-    try {
-      const q = query(collection(db, "tarefas"), orderBy("ordem"));
-      const querySnapshot = await getDocs(q)
-      tasks.value = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-    } catch (error) {
-      console.error("Erro ao buscar dados: ", error);
-    }
-  };
+  const moveTask = async (direction: string,task: object, index: number) => {
+    if(direction === 'up' && index > 0) {
+      const upTask = tasksManager.tasks[index - 1]
+      await updateOrder(task, upTask)
+      tasksManager.tasks[index] = { ...upTask, ordem: task.ordem };
+      tasksManager.tasks[index-1] = { ...task, ordem: upTask.ordem };
+    } 
+    else if(direction === 'down' && index < tasksManager.tasks.length  - 1){
+      const belowTask = tasksManager.tasks[index + 1]
+      await updateOrder(task, belowTask)
 
-  onMounted(() =>{
-    fetchAllData()
-  })
+      tasksManager.tasks[index] = { ...belowTask, ordem: task.ordem };
+      tasksManager.tasks[index + 1] = { ...task, ordem: belowTask.ordem };
+    }
+  }
+
+  const updateOrder = async (task1: object, task2: object) => { 
+    const task1Ref = doc(db, 'tarefas', task1.id);
+    const task2Ref = doc(db, 'tarefas', task2.id);
+
+    await updateDoc(task1Ref, { ordem: task2.ordem });
+    await updateDoc(task2Ref, { ordem: task1.ordem });
+
+    await tasksManager.get_all_tasks();
+  }
 </script>

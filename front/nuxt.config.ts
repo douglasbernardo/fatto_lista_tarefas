@@ -8,7 +8,7 @@ export default defineNuxtConfig({
   },
 
   modules:[
-    '@pinia/nuxt',
+    "@pinia/nuxt"
   ],
 
   compatibilityDate: '2024-10-29',
