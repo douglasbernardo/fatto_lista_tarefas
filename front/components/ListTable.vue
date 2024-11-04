@@ -24,20 +24,24 @@
             <v-btn icon="mdi-delete" @click="deletes(task.name, task.id)" variant="text" color="red"/>
           </td>
           <td>
-            <v-btn color="green" :disabled="index == 0" icon="mdi-arrow-up" variant="text" @click="moveTask('up', task,index)"></v-btn>
-            <v-btn color="blue" :disabled="index === tasksManager.tasks.length - 1" icon="mdi-arrow-down" @click="moveTask('down', task,index)" variant="text"></v-btn>
+            <v-btn color="green" :disabled="index == 0" icon="mdi-arrow-up" variant="text" @click="moveTasks.moveTask('up', task,index)"></v-btn>
+            <v-btn color="blue" :disabled="index === tasksManager.tasks.length - 1" icon="mdi-arrow-down" @click="moveTasks.moveTask('down', task,index)" variant="text"></v-btn>
           </td>
         </tr>
         <h3 v-if="!tasksManager.tasks.length" class="text-center">Não há tarefas cadastradas no momento</h3>
       </tbody>
     </v-table>
-    <v-dialog v-model="insertTask" width="auto">
+    <v-dialog persistent v-model="insertTask" width="auto">
       <v-card max-width="auto">
       <v-card-title class="bg-grey text-center">
         {{!isEditing ? 'Adicionar Nova Tarefa' : 'Editar Tarefa'}}
       </v-card-title>
       <v-sheet class="mx-auto" width="400">
-      <p v-if="errorInsert" class="bg-red text-center ma-2">{{ errorInsert }}</p>
+      <v-alert 
+        v-for="error in tasksManager.errorMessages"
+        class="bg-red text-center ma-2" 
+        :text="error"
+      />
     <v-form fast-fail @submit.prevent class="ma-2">
       <v-text-field
         v-model="dataInsert.name"
@@ -50,6 +54,7 @@
       <v-text-field
         v-model="dataInsert.date"
         label="Data Limite"
+        placeholder="Exemplo 12/10/2024"
       ></v-text-field>
     </v-form>
   </v-sheet>
@@ -59,15 +64,18 @@
           v-if="!isEditing"
           class="bg-blue"
           text="Adicionar"
-          block
           @click="addTask"
         ></v-btn>
         <v-btn
           v-else
           class="bg-blue"
           text="Editar"
-          block
           @click="editTask"
+        ></v-btn>
+        <v-btn
+          class="bg-red-lighten-2"
+          text="Cancelar"
+          @click="clearDialog"
         ></v-btn>
       </v-card-actions>
     </v-card>
@@ -93,11 +101,13 @@
   </v-container>
 </template>
 <script setup lang="ts">
-  import { collection, doc, getDoc, getDocs, query, updateDoc, where } from 'firebase/firestore';
+  import { collection, doc, getDoc, getDocs, query, where } from 'firebase/firestore';
   import { db } from '~/firebaseConfig';
   import { useTaskStore } from '~/store/tasks/task_manager';
+  import { useMovement } from '~/store/tasks/movement';
 
   const tasksManager = useTaskStore()
+  const moveTasks = useMovement()
 
   const tableHeaders = ref(['ID','Nome da Tarefa','Custo','Data Limite', 'Ações'])
   const deleteTaskDialog = ref(false)
@@ -107,13 +117,18 @@
   const nameToDelete = ref("")
   const idDelete = ref("")
   const dataInsert = reactive({ name: '', cost: '', date: '' })
-  const errorInsert = ref('')
 
   onMounted(() =>{
     tasksManager.get_all_tasks()
   })
   
   const clearData = (() => { [dataInsert.name, dataInsert.cost, dataInsert.date] = '' })
+  const clearDialog = () => {
+    clearData()
+    tasksManager.errorMessages = []
+    insertTask.value = false
+    isEditing.value = false
+  }
 
   const deletes = ((name: string, id: string) => {
     nameToDelete.value = name
@@ -125,18 +140,11 @@
     deleteTaskDialog.value = false
   }
 
-  const verifyName = (async(name: string) => {
-    if (!name || name.trim() === "") return true;
-    const q = query(collection(db, "tarefas"), where("name", "==", name));
-    const querySnapshot = await getDocs(q);
-    return !querySnapshot.empty
-  })
-
   const edit = (async(taskId: string) => {
     idEdit.value = taskId
     isEditing.value = true
     insertTask.value = true
-    const q = doc(db, "tarefas", taskId); // Referência ao documento
+    const q = doc(db, "tarefas", taskId);
     const querySnapshot = await getDoc(q)
     dataInsert.name = querySnapshot.data().name
     dataInsert.cost = querySnapshot.data().cost
@@ -149,47 +157,18 @@
       await tasksManager.editTask(idEdit.value,dataInsert)
       clearData()
       insertTask.value = false
-      errorInsert.value = ''
+      isEditing.value = false
     }else{
-      errorInsert.value = 'Essa tarefa já existe, escolha outro nome!'
+      tasksManager.errorMessages.push('Essa tarefa já existe, escolha outro nome!')
     }
   })
 
   const addTask = async() => {
-    const nameExists = await verifyName(dataInsert.name.trim())
-    if(!nameExists){
-      errorInsert.value = ''
-      await tasksManager.add_task(dataInsert)
+    isEditing.value = false
+    await tasksManager.add_task(dataInsert)
+    if(tasksManager.errorMessages.length < 1) 
+      tasksManager.get_all_tasks() 
       insertTask.value = false
-      clearData()
-    }else{
-      errorInsert.value = 'Essa tarefa já existe, escolha outro nome!'
-    }
-  }
-
-  const moveTask = async (direction: string,task: object, index: number) => {
-    if(direction === 'up' && index > 0) {
-      const upTask = tasksManager.tasks[index - 1]
-      await updateOrder(task, upTask)
-      tasksManager.tasks[index] = { ...upTask, ordem: task.ordem };
-      tasksManager.tasks[index-1] = { ...task, ordem: upTask.ordem };
-    } 
-    else if(direction === 'down' && index < tasksManager.tasks.length  - 1){
-      const belowTask = tasksManager.tasks[index + 1]
-      await updateOrder(task, belowTask)
-
-      tasksManager.tasks[index] = { ...belowTask, ordem: task.ordem };
-      tasksManager.tasks[index + 1] = { ...task, ordem: belowTask.ordem };
-    }
-  }
-
-  const updateOrder = async (task1: object, task2: object) => { 
-    const task1Ref = doc(db, 'tarefas', task1.id);
-    const task2Ref = doc(db, 'tarefas', task2.id);
-
-    await updateDoc(task1Ref, { ordem: task2.ordem });
-    await updateDoc(task2Ref, { ordem: task1.ordem });
-
-    await tasksManager.get_all_tasks();
+    insertTask.value=true
   }
 </script>
