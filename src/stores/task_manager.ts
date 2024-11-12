@@ -60,6 +60,9 @@ export const useTaskStore = defineStore('taskManager',{
 
             const month = parseInt(date.split('/')[1])
             const currentMonth = new Date().getMonth() + 1
+
+            const day = parseInt(date.split('/')[0],10)
+            const currentDay = new Date().getDate()
             
             if (year < currentYear) {
                 return { isValid: false, message: 'O ano não pode ser menor que o atual!' };
@@ -67,8 +70,10 @@ export const useTaskStore = defineStore('taskManager',{
                 if(month < currentMonth){
                     return { isValid: false, message: 'O mës não pode ser menor que o atual!' };
                 }
+                else if(month === currentMonth && day < currentDay){
+                    return { isValid: false, message: 'O dia não pode ser menor que o atual!' };
+                }
             }
-        
             return { isValid: true, message: '' };
         },
         
