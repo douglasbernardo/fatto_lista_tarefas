@@ -23,10 +23,12 @@ export const useTaskStore = defineStore('taskManager',{
                 return;
             }
 
-            if (!Number(data.cost)) {
-                this.errorMessages.push('Campo Custo deve ser um valor numerico');
+            data.cost = typeof data.cost === "string" ? data.cost.replace(',', '.') : data.cost;
+            if (isNaN(data.cost) || data.cost < 0) {
+                this.errorMessages.push('Campo Custo é inválido');
                 return;
             }
+            
         
         
             const validDate = await this.is_date_valid(data.date);
@@ -54,25 +56,14 @@ export const useTaskStore = defineStore('taskManager',{
             if (!regex.test(date)) {
                 return { isValid: false, message: 'Essa não é uma data válida! O formato deve ser DIA/MÊS/ANO.' };
             }
-        
-            const year = parseInt(date.split('/')[2], 10);
-            const currentYear = new Date().getFullYear();
-
-            const month = parseInt(date.split('/')[1])
-            const currentMonth = new Date().getMonth() + 1
-
-            const day = parseInt(date.split('/')[0],10)
-            const currentDay = new Date().getDate()
-            
-            if (year < currentYear) {
-                return { isValid: false, message: 'O ano não pode ser menor que o atual!' };
-            }else if(year === currentYear){
-                if(month < currentMonth){
-                    return { isValid: false, message: 'O mës não pode ser menor que o atual!' };
-                }
-                else if(month === currentMonth && day < currentDay){
-                    return { isValid: false, message: 'O dia não pode ser menor que o atual!' };
-                }
+            const [day, month, year] = date.split('/').map(part => parseInt(part,10))
+            const dateObj = new Date(year, month - 1, day);
+            if (
+                dateObj.getFullYear() !== year ||
+                dateObj.getMonth() + 1 !== month ||
+                dateObj.getDate() !== day
+            ) {
+                return { isValid: false, message: 'Data inválida!' };
             }
             return { isValid: true, message: '' };
         },

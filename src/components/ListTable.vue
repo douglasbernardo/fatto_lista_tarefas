@@ -51,6 +51,7 @@
             <v-text-field
               v-model="dataInsert.name"
               label="Nome da Tarefa"
+              autofocus
             ></v-text-field>
             <v-text-field
               v-model="dataInsert.cost"
@@ -118,7 +119,7 @@
   const tasksManager = useTaskStore();
   const moveTasks = useMovement();
 
-  const tableHeaders = ref(['ID','Nome da Tarefa','Custo','Data Limite', 'Ações']);
+  const tableHeaders = ref(['ID','Tarefa','Custo','Data Limite', 'Ações']);
   const deleteTaskDialog = ref(false);
   const insertTask = ref(false);
   const isEditing = ref(false);
@@ -128,7 +129,7 @@
   const dataInsert = reactive({ name: '', cost: '', date: '' });
 
   onMounted(() => {
-    tasksManager.get_all_tasks();
+    tasksManager.get_all_tasks()
   });
   
   const clearData = (() => { [dataInsert.name, dataInsert.cost, dataInsert.date] = ''; });
