@@ -162,24 +162,21 @@
   });
   
   const editTask = (async() => {
-    const q = query(collection(db, "tarefas"), where("name", "==", dataInsert.name.trim()));
-    const querySnapshot = await getDocs(q);
-    if(!querySnapshot.docs.some(doc => doc.id !== idEdit.value)){
-      await tasksManager.editTask(idEdit.value, dataInsert);
-      clearData();
-      insertTask.value = false;
-      isEditing.value = false;
-    } else {
-      tasksManager.errorMessages.push('Essa tarefa já existe, escolha outro nome!');
+    isEditing.value = true
+    await tasksManager.editTask(idEdit.value, dataInsert)
+    if(tasksManager.errorMessages.length ===0){
+      clearData()
+      isEditing.value = false
+      insertTask.value = false
+    }else{
+      isEditing.value = true
     }
   });
 
   const addTask = async() => {
     isEditing.value = false;
     await tasksManager.add_task(dataInsert)
-
     if(tasksManager.errorMessages.length === 0){
-      clearData()
       insertTask.value = false
     }else{
       insertTask.value = true

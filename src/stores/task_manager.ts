@@ -11,26 +11,8 @@ export const useTaskStore = defineStore('taskManager',{
 
     actions: {
         async add_task(data: {name: string, cost: string, date: string}) {
-            const novaOrdem = await this.get_new_order();
-
-            if (!data.name || !data.cost || !data.date) {
-                this.errorMessages.push('Preencha todos os dados.');
-                return;
-            }            
-
-            if (await this.verifyName(data.name.trim())) {
-                this.errorMessages.push('Essa Tarefa já existe! Escolha outro nome.');
-                return;
-            }
-
-            data.cost = typeof data.cost === "string" ? data.cost.replace(',', '.') : data.cost;
-            if (isNaN(data.cost) || data.cost < 0) {
-                this.errorMessages.push('Campo Custo é inválido');
-                return;
-            }
-            
-        
-        
+            const novaOrdem = await this.get_new_order()
+            await this.validateFields(data)
             const validDate = await this.is_date_valid(data.date);
             if (!validDate.isValid) {
                 this.errorMessages.push(validDate.message);
@@ -88,15 +70,32 @@ export const useTaskStore = defineStore('taskManager',{
             }
         },
 
-        async editTask(id: string, data){
-            const docRef = doc(db, "tarefas", id); 
+        async editTask(id: string, data: {name: string, cost: string, date: string}){
             try {
-                await updateDoc(docRef, {
-                    name: data.name,
-                    cost: data.cost,
-                    date: data.date
-                });
-                this.get_all_tasks()
+                const q = query(collection(db, "tarefas"), where("name", "==", data.name.trim()));
+                const querySnapshot = await getDocs(q);
+                if(!querySnapshot.docs.some(doc => doc.id !== id)){
+                    data.cost = typeof data.cost === "string" ? data.cost.replace(',', '.') : data.cost;
+                    if (isNaN(data.cost) || data.cost < 0) {
+                        this.errorMessages.push('Campo Custo é inválido');
+                        return;
+                    }
+                    const validDate = await this.is_date_valid(data.date);
+                    if (!validDate.isValid) {
+                        this.errorMessages.push(validDate.message);
+                        return;
+                    }
+                    const docRef = doc(db, "tarefas", id); 
+                    await updateDoc(docRef, {
+                        name: data.name,
+                        cost: data.cost,
+                        date: data.date
+                    });
+                    this.get_all_tasks()
+                    this.errorMessages = []
+                }else{
+                    this.errorMessages.push('Tarefa já existente, escolha outro nome!')
+                }
             }
             catch (error) {
                 console.error("Erro ao atualizar documento: ", error);
@@ -109,5 +108,25 @@ export const useTaskStore = defineStore('taskManager',{
             const querySnapshot = await getDocs(q);
             return !querySnapshot.empty
         },
+
+        async validateFields(value: {name: string, cost: number, date: string}){
+            if (!value.name || !value.cost || !value.date) {
+                this.errorMessages.push('Preencha todos os dados.');
+                return false;
+            }            
+
+            if (await this.verifyName(value.name.trim())) {
+                this.errorMessages.push('Essa Tarefa já existe! Escolha outro nome.');
+                return false;
+            }
+
+            value.cost = typeof value.cost === "string" ? value.cost.replace(',', '.') : value.cost;
+            if (isNaN(value.cost) || value.cost < 0) {
+                this.errorMessages.push('Campo Custo é inválido');
+                return false;
+            }
+
+            return true
+        }
     }
 })
